@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shopping-assistant"
+version = "0.1.0"
+description = "Step 1 shopping assistant: rough description to ranked product suggestions as validated JSON."
+requires-python = ">=3.12"
+# Exact versions tested; the full resolved set is in requirements.txt.
+dependencies = [
+    "anthropic==2.10.0",
+    "jsonschema==4.26.0",
+    "python-dotenv==1.2.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==9.2.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

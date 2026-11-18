@@ -1,0 +1,5 @@
+"""Step 1 shopping assistant harness."""
+
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]  # project root: src/shopping_assistant -> src -> root

@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "request_id": "b6b8e24c-3269-4f27-9ff9-364f2e8e695a",
+  "status": "ok",
+  "data": {
+    "interpreted_description": "Creamy breakfast options without a strongly sweet flavour.",
+    "assumptions": [],
+    "requested_n": 3,
+    "returned_n": 3,
+    "provider_mode": "mock",
+    "product_source": "model_suggestion",
+    "products": [
+      {
+        "rank": 1,
+        "name": "Chobani Plain Greek Yogurt",
+        "description": "A thick, unflavoured Greek-style yogurt.",
+        "reason": "Its thick, creamy texture matches the request, and the plain variety is not sweet."
+      },
+      {
+        "rank": 2,
+        "name": "Uncle Tobys Traditional Rolled Oats",
+        "description": "Whole rolled oats for cooking porridge.",
+        "reason": "Porridge is creamy and can be kept unsweetened."
+      },
+      {
+        "rank": 3,
+        "name": "Oatly Oat Milk Barista Edition",
+        "description": "A creamy oat milk made for coffee and cereal.",
+        "reason": "Adds creaminess to porridge or coffee without much sweetness."
+      }
+    ],
+    "shortfall_reason": null
+  },
+  "error": null
+}

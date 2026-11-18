@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Step 1 public response",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "const": "ok"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "interpreted_description": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "assumptions": {
+              "type": "array",
+              "maxItems": 5,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              }
+            },
+            "requested_n": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "returned_n": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "provider_mode": {
+              "enum": [
+                "mock",
+                "live"
+              ]
+            },
+            "product_source": {
+              "const": "model_suggestion"
+            },
+            "products": {
+              "type": "array",
+              "maxItems": 10,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "rank": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "description": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  }
+                },
+                "required": [
+                  "rank",
+                  "name",
+                  "description",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "shortfall_reason": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "interpreted_description",
+            "assumptions",
+            "requested_n",
+            "returned_n",
+            "provider_mode",
+            "product_source",
+            "products",
+            "shortfall_reason"
+          ],
+          "additionalProperties": false
+        },
+        "error": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "schema_version",
+        "request_id",
+        "status",
+        "data",
+        "error"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "const": "error"
+        },
+        "data": {
+          "type": "null"
+        },
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "enum": [
+                "INVALID_INPUT",
+                "CONFIG_ERROR",
+                "UPSTREAM_ERROR",
+                "MODEL_REFUSAL",
+                "INCOMPLETE_OUTPUT",
+                "INVALID_MODEL_OUTPUT",
+                "INTERNAL_ERROR"
+              ]
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "retryable": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "code",
+            "message",
+            "retryable"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "request_id",
+        "status",
+        "data",
+        "error"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

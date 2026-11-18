@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "request_id": "8f3c185e-f2c4-4d57-872e-783ec21a1800",
+  "status": "error",
+  "data": null,
+  "error": {
+    "code": "INVALID_INPUT",
+    "message": "top_n must be an integer from 1 to 10.",
+    "retryable": false
+  }
+}
