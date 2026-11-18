@@ -12,7 +12,7 @@ Known limitations carried forward (accepted at close):
   product (Favourites "bar") and one uncertain product (Milo bar).
 - Soft constraints such as "not too heavy" are only partly honoured.
 - Live behaviour was checked with one request on `claude-haiku-5-5` only.
-- The folder is not under version control yet.
+- Version control: a git repo on `main`, with Step 1 baseline commit 122c1e7. There is no remote yet.
 
 ## Done
 
