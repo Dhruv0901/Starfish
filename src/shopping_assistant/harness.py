@@ -13,7 +13,7 @@ from .trace import TRACE_PATH, append_trace
 from .validation import MODEL_SCHEMA, normalize_request, validate_model_output, validate_public
 
 PROMPT_PATH = ROOT / "prompts" / "recommend-products.system.md"
-PROMPT_VERSION = "step-01-v3"
+PROMPT_VERSION = "step-02-v1"
 SCHEMA_VERSION = "1.0"
 
 _STOP_REASON_ERRORS = {
