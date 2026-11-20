@@ -1,30 +1,31 @@
-# Shopping assistant (Step 1)
+# Starfish shopping assistant
 
-A local Python CLI that turns a rough shopping description into a short interpretation
-and up to N ranked product suggestions, as validated JSON. One Claude API call per live
-run. Each suggestion has a specific, shelf-style product name (brand, product and
-variant), but it is written by the model and unverified: there are no prices, stock or
-store data.
+A Python harness (CLI and a thin HTTP endpoint) that turns a rough shopping description into a short
+interpretation and up to N ranked product suggestions, as validated JSON, plus the Starfish
+shopping-list app for Android and iOS in `mobile/`. One Claude API call per live run. Suggestions are
+written by the model and unverified: there are no prices, stock or store data.
 
-Requirements: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md). Progress: [docs/CURRENT_STEP.md](docs/CURRENT_STEP.md).
+## Python setup (Windows)
 
-## Setup (Windows)
+`requirements.txt` and `pyproject.toml` are no longer in the repo, so install the tested versions directly
+and put `src` on the path:
 
-```bash
+```powershell
 py -3.12 -m venv .venv
-.venv\Scripts\python -m pip install -r requirements.txt
-.venv\Scripts\python -m pip install -e . --no-deps
+.venv\Scripts\python -m pip install anthropic==2.10.0 jsonschema==4.26.0 python-dotenv==1.2.4 pytest==9.2.0
+$env:PYTHONPATH = "src"
 ```
 
-For live mode, copy `.env.example` to `.env`, then set `ANTHROPIC_API_KEY` and
-`ANTHROPIC_MODEL`. Never commit `.env`.
+For live mode, create `.env` with `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL` (optional:
+`MODEL_TIMEOUT_SECONDS`, `MODEL_MAX_OUTPUT_TOKENS`, `PROVIDER_MODE`). Never commit `.env`.
 
 ## Run
 
-```bash
+```powershell
 .venv\Scripts\python -m pytest
 .venv\Scripts\python -m shopping_assistant --request examples/request.json --mode mock
 .venv\Scripts\python -m shopping_assistant --prompt "Quick healthy lunch" --top-n 4 --mode live
+.venv\Scripts\python -m shopping_assistant.server --host 127.0.0.1 --port 8000 --mode mock
 ```
 
 - `--request FILE` and `--prompt TEXT` are mutually exclusive. `--top-n` only goes with `--prompt`.
@@ -32,11 +33,108 @@ For live mode, copy `.env.example` to `.env`, then set `ANTHROPIC_API_KEY` and
 - Every run prints one JSON envelope and appends metadata to `traces/runs.jsonl`.
 - Exit codes: 0 for ok, 2 for input or config errors, 1 for any other error.
 
+### HTTP endpoint
+
+`POST /recommendations` takes the request JSON (`{"prompt": "Milk for my coffee", "top_n": 6}`) and
+returns the same public envelope as the CLI. Status is 200 for ok, 400 for `INVALID_INPUT`, 502 for
+upstream/model output errors, 422 for a refusal and 500 otherwise; the body is always the envelope.
+The server is plain HTTP and keeps the Anthropic key in its own environment. For phones, deploy it
+behind HTTPS (any host or reverse proxy) and run it with `--host 0.0.0.0 --mode live`.
+
+The endpoint has no authentication or rate limit yet (Step 6 guardrails). A live app build contains its
+URL in plain text, so anyone with the APK can call it and spend the Anthropic key: set a spend limit on
+that key, and keep live builds to trusted testers until guardrails land. Demo builds call no server.
+
+## Mobile app (`mobile/`)
+
+Expo SDK 58, React Native 0.88, TypeScript, npm lockfile. Two views: the shopping list and a
+full-screen search. The list is stored on the device (AsyncStorage). No accounts, sync, prices or stock.
+
+```powershell
+cd mobile
+npm ci
+npm test                 # list, persistence, search adapter and UI journey tests (demo and live)
+npm run typecheck
+npm run export:check     # Android and iOS JS bundles from the same source, into mobile/dist
+npx expo start           # open in Expo Go or a dev build
+```
+
+### Search source (build configuration only)
+
+| Variable | Values | Effect |
+| --- | --- | --- |
+| `EXPO_PUBLIC_SEARCH_MODE` | `demo` (default) | Bundled 59-product catalogue, deterministic ranking, up to 6 results, works in airplane mode. Labelled "Demo search". |
+| | `live` | `POST {EXPO_PUBLIC_API_BASE_URL}/recommendations` with `top_n: 6`. Shows the backend's names and descriptions as suggestions. Errors show the message and, when retryable, Retry; never demo results. |
+| `EXPO_PUBLIC_API_BASE_URL` | `https://…` | Required for `live`. Release builds accept only HTTPS. No secrets: it ships inside the app. |
+
+The variables are read at bundle time. Locally, set them in the shell or `mobile/.env` (see
+`mobile/.env.example`). For EAS builds, the profile sets the mode and the URL comes from the EAS
+environment: `npx eas-cli@latest env:create --name EXPO_PUBLIC_API_BASE_URL --value https://YOUR-HOST --environment preview --visibility plaintext`.
+
+### App identity
+
+| Field | Value |
+| --- | --- |
+| Name | Starfish |
+| Version | 0.2.5 |
+| Android versionCode | 1 (bump for every Play upload) |
+| Android package / iOS bundle ID | `io.github.dhruv0901.starfish` (**proposed**, not yet registered anywhere; it cannot change after the first Play upload) |
+| Icons | `mobile/assets/`, generated by `py -I mobile/scripts/make-icons.py mobile/assets` |
+
+### Builds
+
+| Profile | Artifact | Search | Use |
+| --- | --- | --- | --- |
+| `preview` | APK | demo | Direct install on a tester's phone |
+| `production` | AAB | demo | Google Play internal testing |
+| `preview-live`, `production-live` | APK, AAB | live | Once an HTTPS backend exists |
+
+From a clean checkout, as the Expo account owner:
+
+```powershell
+cd mobile
+npm ci
+npx eas-cli@latest login
+npx eas-cli@latest init                                         # once; writes the project ID into app.json, commit it
+npx eas-cli@latest build --platform android --profile preview     # APK
+npx eas-cli@latest build --platform android --profile production  # AAB
+```
+
+EAS generates the Android upload keystore on the first build and keeps it on Expo's servers
+(`npx eas-cli@latest credentials` to download a backup). Signing files, `credentials.json` and the Play
+service-account key belong in `mobile/secrets/`, which Git ignores.
+
+### Google Play internal testing
+
+1. Play Console → Create app → "Starfish", package `io.github.dhruv0901.starfish`.
+2. The first AAB must be uploaded by hand: Test and release → Internal testing → Create new release →
+   upload the `production` AAB from the EAS build page, accept Play App Signing, and save.
+3. Finish the dashboard tasks Play requires before a rollout (app access, ads, content rating, target
+   audience, data safety, privacy policy link).
+4. Internal testing → Testers: create an email list, add testers, save, then copy the "Join on the web"
+   opt-in link and send it to them. Roll out the release.
+5. Later releases: bump `android.versionCode`, put a Play service-account key at
+   `mobile/secrets/play-service-account.json`, then
+   `npx eas-cli@latest build --platform android --profile production --auto-submit`
+   (submits to the internal track only).
+
+### Step 2.5 status
+
+| Item | State |
+| --- | --- |
+| EAS project | `@dhruvmehan/starfish` (ID in `mobile/app.json`); Android upload keystore generated and held by EAS |
+| APK (`preview`, demo search) | Built 2026-11-20, version 0.2.5 (1): [build](https://expo.dev/accounts/dhruvmehan/projects/starfish/builds/e979d1be-c763-4b1e-8c3e-4a3431483072) · [APK](https://expo.dev/artifacts/eas/U7B6P5pGCqEce7mhQvpW337IO0Cxq3yZ76LOxrYvGnU.apk) |
+| AAB (`production`, demo search) | Built 2026-11-20, version 0.2.5 (1): [build](https://expo.dev/accounts/dhruvmehan/projects/starfish/builds/ab0b0889-3cc7-4b0b-a7ab-54882497a8c0) · [AAB](https://expo.dev/artifacts/eas/XcEx3JJCzdqEd5EPwnX-DHi3QFs6BFplSclqE8LW4-Q.aab) |
+| Play | Generated bundle only. Not uploaded: no draft, no release, no tester opt-in link yet. Next action is the owner's manual first upload (steps above). |
+
+Both builds were made with `EAS_NO_VCS=1` from the uncommitted working tree; after committing, drop that variable.
+
 ## Layout
 
 | Path | Role |
 | --- | --- |
 | src/shopping_assistant/__main__.py | CLI and exit codes |
+| src/shopping_assistant/server.py | `POST /recommendations` over the same harness |
 | src/shopping_assistant/harness.py | Fixed run sequence, envelopes, trace record |
 | src/shopping_assistant/provider.py | Provider protocol, canned mock, Anthropic adapter |
 | src/shopping_assistant/validation.py | Strict JSON, schema and rule checks |
@@ -44,5 +142,8 @@ For live mode, copy `.env.example` to `.env`, then set `ANTHROPIC_API_KEY` and
 | prompts/ | Runtime system prompt sent to the model |
 | schemas/ | Request, model-output and public-response contracts |
 | examples/ | Mock request/output and sample envelopes |
-| tests/ | Offline tests (network blocked) |
-| AGENTS.md, CLAUDE.md | Instructions for the coding assistant, never sent to the model |
+| tests/ | Offline tests (network blocked; the server test allows loopback only) |
+| mobile/App.tsx | List and search views |
+| mobile/src/ | Demo catalogue, search adapter, list rules and storage |
+| mobile/__tests__/ | Jest tests, including the acceptance journey through the UI |
+| mobile/app.json, mobile/eas.json | App identity and build profiles |

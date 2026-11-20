@@ -1,0 +1,36 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "environment": "preview",
+      "android": { "buildType": "apk" },
+      "env": { "EXPO_PUBLIC_SEARCH_MODE": "demo" }
+    },
+    "production": {
+      "environment": "production",
+      "android": { "buildType": "app-bundle" },
+      "env": { "EXPO_PUBLIC_SEARCH_MODE": "demo" }
+    },
+    "preview-live": {
+      "extends": "preview",
+      "env": { "EXPO_PUBLIC_SEARCH_MODE": "live" }
+    },
+    "production-live": {
+      "extends": "production",
+      "env": { "EXPO_PUBLIC_SEARCH_MODE": "live" }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./secrets/play-service-account.json",
+        "track": "internal",
+        "releaseStatus": "completed"
+      }
+    }
+  }
+}
