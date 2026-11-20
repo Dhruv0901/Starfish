@@ -35,15 +35,15 @@ def serve(tmp_path, monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", loopback_only)
     servers = []
 
-    def start(provider=None):
+    def start(provider=None, tester_code=None):
         server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(
-            provider or CannedMockProvider(), "mock", trace_path=tmp_path / "runs.jsonl"))
+            provider or CannedMockProvider(), "mock", trace_path=tmp_path / "runs.jsonl", tester_code=tester_code))
         threading.Thread(target=server.serve_forever, daemon=True).start()
         servers.append(server)
 
-        def post(body: bytes, path="/recommendations"):
+        def post(body: bytes, path="/recommendations", headers=None, method="POST"):
             conn = HTTPConnection("127.0.0.1", server.server_address[1], timeout=10)
-            conn.request("POST", path, body=body, headers={"Content-Type": "application/json"})
+            conn.request(method, path, body=body, headers={"Content-Type": "application/json", **(headers or {})})
             response = conn.getresponse()
             return response.status, json.loads(response.read())
         return post
@@ -82,3 +82,45 @@ def test_retryable_provider_error_is_502_with_envelope(serve):
 def test_unknown_path_is_404(serve):
     status, body = serve()(REQUEST_BODY, path="/other")
     assert status == 404 and body == {"detail": "Not found."}
+
+
+class CountingProvider(CannedMockProvider):
+    def __init__(self):
+        super().__init__()
+        self.calls = 0
+
+    def generate(self, *args):
+        self.calls += 1
+        return super().generate(*args)
+
+
+@pytest.mark.parametrize("headers", [{}, {"X-Starfish-Tester-Code": "wrong"}, {"X-Starfish-Tester-Code": ""}])
+def test_missing_or_wrong_tester_code_is_401_with_no_provider_call(serve, headers):
+    provider = CountingProvider()
+    status, envelope = serve(provider, tester_code="s3cret-code")(REQUEST_BODY, headers=headers)
+    assert status == 401
+    validate_public(envelope)
+    assert envelope["error"]["code"] == "UNAUTHORIZED" and envelope["error"]["retryable"] is False
+    assert provider.calls == 0
+
+
+def test_correct_tester_code_runs_the_harness_once(serve):
+    provider = CountingProvider()
+    status, envelope = serve(provider, tester_code="s3cret-code")(
+        REQUEST_BODY, headers={"X-Starfish-Tester-Code": "s3cret-code"})
+    assert status == 200 and envelope["status"] == "ok" and provider.calls == 1
+
+
+def test_healthz_makes_no_provider_call(serve):
+    provider = CountingProvider()
+    status, body = serve(provider, tester_code="s3cret-code")(None, path="/healthz", method="GET")
+    assert status == 200 and body == {"status": "ok", "mode": "mock"} and provider.calls == 0
+
+
+def test_live_server_refuses_to_start_without_a_tester_code(monkeypatch):
+    from shopping_assistant import server
+    monkeypatch.setattr(server, "load_dotenv", lambda *a, **k: None)
+    monkeypatch.delenv("STARFISH_TESTER_CODE", raising=False)
+    with pytest.raises(AppError) as exc:
+        server.main(["--mode", "live", "--port", "0"])
+    assert exc.value.code == "CONFIG_ERROR"

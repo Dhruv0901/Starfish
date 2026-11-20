@@ -5,8 +5,11 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 import App from '../App';
+import { STORAGE_KEY } from '../src/list';
+import { saveTesterCode, TESTER_CODE_KEY } from '../src/search';
 
-const PUBLIC_EXAMPLE = JSON.parse(readFileSync(join(__dirname, '..', '..', 'examples', 'public-response.json'), 'utf8'));
+const MOCK_EXAMPLE = JSON.parse(readFileSync(join(__dirname, '..', '..', 'examples', 'public-response.json'), 'utf8'));
+const PUBLIC_EXAMPLE = { ...MOCK_EXAMPLE, data: { ...MOCK_EXAMPLE.data, provider_mode: 'live' } };
 const mockFetch = jest.fn();
 
 jest.mock('../src/search', () => {
@@ -23,6 +26,7 @@ const reply = (body: unknown, status = 200) => () => Promise.resolve(json(body, 
 
 beforeEach(async () => {
   await AsyncStorage.clear();
+  await saveTesterCode('tester-123');
   mockFetch.mockReset();
 });
 
@@ -55,6 +59,7 @@ test('an empty success is "No close matches", not an error', async () => {
   await openAndSubmit('zzqx');
   expect(await screen.findByText('No close matches for “zzqx”')).toBeTruthy();
   expect(screen.queryByText('Search didn’t work')).toBeNull();
+  expect(screen.getByText('Add “Zzqx” as written')).toBeTruthy();
 });
 
 test('a retryable error envelope keeps the query and offers Retry; no demo results appear', async () => {
@@ -100,4 +105,43 @@ test('a late response after Back is dropped and its request aborted', async () =
   await act(async () => resolve(json(PUBLIC_EXAMPLE)));
   expect(screen.getByText('Your list is empty')).toBeTruthy();
   expect(screen.queryByText(/Starfish suggests/)).toBeNull();
+});
+
+test('first live search asks for the tester code, then searches with it', async () => {
+  await AsyncStorage.removeItem(TESTER_CODE_KEY);
+  mockFetch.mockImplementation(reply(PUBLIC_EXAMPLE));
+  await openAndSubmit('Milk for my coffee');
+  expect(await screen.findByText('Enter the tester code you were given to use live search.')).toBeTruthy();
+  expect(mockFetch).not.toHaveBeenCalled();
+
+  await fireEvent.changeText(screen.getByLabelText('Tester code'), 'tester-123');
+  await fireEvent.press(screen.getByText('Save code and search'));
+  expect(await screen.findByText(/^Starfish suggests 3 products/)).toBeTruthy();
+  expect(mockFetch.mock.calls[0][1].headers['X-Starfish-Tester-Code']).toBe('tester-123');
+  expect(await AsyncStorage.getItem(TESTER_CODE_KEY)).toBe('tester-123');
+});
+
+test.each([
+  ['offline', () => Promise.reject(new TypeError('Network request failed')), 'Couldn’t reach Starfish. Check your connection.'],
+  ['mock server', reply(MOCK_EXAMPLE), 'Starfish answered from a test server, not live search.'],
+  ['provider error', reply({ schema_version: '1.0', request_id: MOCK_EXAMPLE.request_id, status: 'error', data: null,
+    error: { code: 'UPSTREAM_ERROR', message: 'The Claude API returned HTTP 529.', retryable: true } }, 502), 'The Claude API returned HTTP 529.'],
+])('%s: clear error, Add as written still works, saved list intact', async (_name, respond, message) => {
+  const saved = [{ id: 'k1', name: 'Bananas', detail: 'About 1 kg', picked: false }];
+  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+  mockFetch.mockImplementation(respond);
+  await render(<App />);
+  await screen.findByText('Bananas');
+  await fireEvent.press(screen.getByLabelText('Add item'));
+  const field = screen.getByPlaceholderText('What do you need?');
+  await fireEvent.changeText(field, 'chocolate biscuits');
+  await fireEvent(field, 'submitEditing');
+  expect(await screen.findByText(message)).toBeTruthy();
+  expect(screen.queryByText(/Starfish suggests/)).toBeNull();
+
+  await fireEvent.press(screen.getByText('Add “Chocolate biscuits” as written'));
+  expect(screen.getByText('Bananas')).toBeTruthy();
+  expect(screen.getByText('Chocolate biscuits')).toBeTruthy();
+  const stored = JSON.parse((await AsyncStorage.getItem(STORAGE_KEY))!);
+  expect(stored.map((i: { name: string }) => i.name)).toEqual(['Bananas', 'Chocolate biscuits']);
 });

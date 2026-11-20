@@ -1,4 +1,6 @@
 // One search function for the UI; the data source is fixed per build by EXPO_PUBLIC_SEARCH_MODE.
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { demoSearch, findCatalogEntry } from './catalog';
 
 export type Product = {
@@ -8,7 +10,9 @@ export type Product = {
   category?: string; // only when the local catalogue knows this product
 };
 
-export type SearchResult = { ok: true; products: Product[] } | { ok: false; message: string; retryable: boolean };
+export type SearchResult =
+  | { ok: true; products: Product[] }
+  | { ok: false; message: string; retryable: boolean; needsCode?: boolean };
 
 export type SearchMode = 'demo' | 'live';
 
@@ -23,7 +27,14 @@ type Config = {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export function createSearch({ mode, apiBaseUrl = '', demoDelayMs = 450, timeoutMs = 20000, fetchImpl, allowHttp = false }: Config) {
+// Private-test access code, typed once on the device and checked by the server before any Claude call.
+// shortcut: plain AsyncStorage, fine for a revocable tester code; move to expo-secure-store if it ever guards more.
+export const TESTER_CODE_KEY = 'starfish.testerCode.v1';
+export const saveTesterCode = (code: string) => AsyncStorage.setItem(TESTER_CODE_KEY, code.trim());
+const loadTesterCode = () => AsyncStorage.getItem(TESTER_CODE_KEY).then((c) => c?.trim() || null, () => null);
+const NEEDS_CODE = { ok: false, message: 'Enter the tester code you were given to use live search.', retryable: false, needsCode: true } as const;
+
+export function createSearch({ mode, apiBaseUrl = '', demoDelayMs = 450, timeoutMs = 60000, fetchImpl, allowHttp = false }: Config) {
   if (mode === 'demo') {
     return async (query: string, _signal?: AbortSignal): Promise<SearchResult> => {
       await wait(demoDelayMs); // shows the same loading state a network search would
@@ -39,6 +50,8 @@ export function createSearch({ mode, apiBaseUrl = '', demoDelayMs = 450, timeout
 
   return async (query: string, signal?: AbortSignal): Promise<SearchResult> => {
     if (!configured) return { ok: false, message: 'Live search has no HTTPS server set for this build.', retryable: false };
+    const code = await loadTesterCode();
+    if (!code) return NEEDS_CODE; // nothing is sent without a code
     const controller = new AbortController();
     let timedOut = false;
     const timer = setTimeout(() => {
@@ -53,7 +66,7 @@ export function createSearch({ mode, apiBaseUrl = '', demoDelayMs = 450, timeout
     try {
       response = await (fetchImpl ?? fetch)(`${base}/recommendations`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Starfish-Tester-Code': code },
         body: JSON.stringify({ prompt: query, top_n: 6 }),
         signal: controller.signal,
       });
@@ -69,7 +82,11 @@ export function createSearch({ mode, apiBaseUrl = '', demoDelayMs = 450, timeout
       signal?.removeEventListener('abort', onAbort);
     }
 
-    if (body?.status === 'ok' && Array.isArray(body.data?.products)) {
+    if (response.status === 200 && body?.status === 'ok' && Array.isArray(body.data?.products)) {
+      // A live build only trusts live answers; a mock server's canned reply is an error, not suggestions.
+      if (body.data.provider_mode !== 'live') {
+        return { ok: false, message: 'Starfish answered from a test server, not live search.', retryable: false };
+      }
       const products = body.data.products
         .filter((p: any) => typeof p?.name === 'string' && p.name.trim() && typeof p.description === 'string')
         .map((p: any): Product => {
@@ -80,6 +97,7 @@ export function createSearch({ mode, apiBaseUrl = '', demoDelayMs = 450, timeout
       return { ok: true, products };
     }
     if (body?.status === 'error' && typeof body.error?.message === 'string') {
+      if (response.status === 401 || body.error.code === 'UNAUTHORIZED') return { ...NEEDS_CODE, message: body.error.message };
       return { ok: false, message: body.error.message, retryable: body.error.retryable === true };
     }
     return { ok: false, message: `Starfish sent an unexpected response (HTTP ${response.status}).`, retryable: response.status >= 500 };

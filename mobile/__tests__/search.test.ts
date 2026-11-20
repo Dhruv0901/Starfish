@@ -1,11 +1,13 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
 import { demoSearch } from '../src/catalog';
-import { createSearch } from '../src/search';
+import { createSearch, saveTesterCode, TESTER_CODE_KEY } from '../src/search';
 
 const ROOT = join(__dirname, '..', '..');
-const PUBLIC_EXAMPLE = JSON.parse(readFileSync(join(ROOT, 'examples', 'public-response.json'), 'utf8'));
+const MOCK_EXAMPLE = JSON.parse(readFileSync(join(ROOT, 'examples', 'public-response.json'), 'utf8'));
+const PUBLIC_EXAMPLE = { ...MOCK_EXAMPLE, data: { ...MOCK_EXAMPLE.data, provider_mode: 'live' } };
 const ERROR_EXAMPLE = JSON.parse(readFileSync(join(ROOT, 'examples', 'error-response.json'), 'utf8'));
 
 const names = (q: string) => demoSearch(q).map((p) => p.name);
@@ -47,6 +49,11 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const live = (fetchImpl: typeof fetch, extra = {}) => createSearch({ mode: 'live', apiBaseUrl: 'https://api.example.test/', fetchImpl, ...extra });
 
 describe('live search', () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    await saveTesterCode('  tester-123 ');
+  });
+
   test('sends the agreed request and keeps backend order and wording', async () => {
     const f = fakeFetch(() => json(PUBLIC_EXAMPLE));
     const result = await live(f)('Milk for my coffee');
@@ -55,6 +62,7 @@ describe('live search', () => {
     expect(url).toBe('https://api.example.test/recommendations');
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body)).toEqual({ prompt: 'Milk for my coffee', top_n: 6 });
+    expect((init.headers as Record<string, string>)['X-Starfish-Tester-Code']).toBe('tester-123');
     expect(result).toEqual({
       ok: true,
       products: PUBLIC_EXAMPLE.data.products.map((p: any) => ({ name: p.name, meta: p.description, detail: p.description, category: undefined })),
@@ -101,5 +109,30 @@ describe('live search', () => {
       expect(r).toMatchObject({ ok: false, retryable: false });
     }
     expect(f).not.toHaveBeenCalled();
+  });
+
+  test('without a saved tester code nothing is sent and the code is asked for', async () => {
+    await AsyncStorage.removeItem(TESTER_CODE_KEY);
+    const f = fakeFetch(() => json(PUBLIC_EXAMPLE));
+    expect(await live(f)('x')).toMatchObject({ ok: false, retryable: false, needsCode: true });
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  test('a rejected tester code asks for a new one', async () => {
+    const denied = { ...ERROR_EXAMPLE, error: { code: 'UNAUTHORIZED', message: 'This tester code is missing or no longer valid.', retryable: false } };
+    expect(await live(fakeFetch(() => json(denied, 401)))('x')).toEqual({
+      ok: false, message: 'This tester code is missing or no longer valid.', retryable: false, needsCode: true,
+    });
+  });
+
+  test('a mock-mode answer is an error in a live build', async () => {
+    expect(await live(fakeFetch(() => json(MOCK_EXAMPLE)))('x')).toEqual({
+      ok: false, message: 'Starfish answered from a test server, not live search.', retryable: false,
+    });
+  });
+
+  test('an ok envelope with a non-200 status is not accepted', async () => {
+    expect(await live(fakeFetch(() => json(PUBLIC_EXAMPLE, 502)))('x')).toMatchObject({ ok: false, retryable: true });
+    expect(await live(fakeFetch(() => json(PUBLIC_EXAMPLE, 201)))('x')).toMatchObject({ ok: false, retryable: false });
   });
 });
