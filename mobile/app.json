@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Starfish",
+    "slug": "starfish",
+    "version": "0.2.5",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F4F6F8",
+    "ios": {
+      "bundleIdentifier": "io.github.dhruv0901.starfish",
+      "buildNumber": "1",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "io.github.dhruv0901.starfish",
+      "versionCode": 1,
+      "permissions": [],
+      "adaptiveIcon": {
+        "backgroundColor": "#F4F6F8",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-asset"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "48f4ab78-6e13-4d7f-a074-0da891881e95"
+      }
+    },
+    "owner": "dhruvmehan"
+  }
+}
