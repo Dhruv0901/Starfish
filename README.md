@@ -107,7 +107,7 @@ waits 60 s, so that first search is usually slow rather than failed. Set `plan: 
 | --- | --- | --- |
 | `EXPO_PUBLIC_SEARCH_MODE` | `demo` (default) | Bundled 59-product catalogue, deterministic ranking, up to 6 results, works in airplane mode. Labelled "Demo search". |
 | | `live` | `POST {EXPO_PUBLIC_API_BASE_URL}/recommendations` with `top_n: 6` and the tester code header. Accepts only HTTP 200 with a `provider_mode: "live"` envelope and shows the backend's names and descriptions as suggestions. Anything else (offline, a mock server, a provider error) is an error with Add as written and, when retryable, Retry; never demo results. Waits up to 60 s, longer than the server's 30 s Claude timeout. |
-| `EXPO_PUBLIC_API_BASE_URL` | `https://…` | Required for `live`: the bare origin, no path. `app.config.js` fails a live build whose value is missing, a placeholder or not HTTPS. No secrets: it ships inside the app. |
+| `EXPO_PUBLIC_API_BASE_URL` | `https://…` | Required for `live`: the bare origin, no path. On the EAS worker, `app.config.js` fails a live build whose value is missing, a placeholder or not HTTPS (EAS CLI reads the config locally before it loads EAS variables, so the check runs there, not on your PC). No secrets: it ships inside the app. |
 
 The variables are read at bundle time. Locally, set them in the shell or `mobile/.env` (see
 `mobile/.env.example`). For EAS builds, the profile sets the mode and the URL comes from the EAS
@@ -185,9 +185,11 @@ Both builds were made with `EAS_NO_VCS=1` from the uncommitted working tree; aft
 | --- | --- |
 | Code | Branch `step-2.6-live-search`: tester-code gate, `/healthz`, Render Blueprint, strict live client, build-time origin check, 0.2.6 (2). Python and mobile tests, typecheck and export pass; clean-copy install verified. |
 | Model | `claude-haiku-5-5`. One local live run of the biscuit prompt: 9.2 s, 1,540 in / 1,578 out tokens, `attempt_count` 1, three Tim Tam variants. |
-| Hosting | Not deployed yet: needs the Render sign-in and Blueprint steps above. |
-| Live APK / AAB | Not built yet: needs the HTTPS origin in both EAS environments first. |
-| Device test | Not done. |
+| Hosting | Render web service `starfish-api`, origin `https://starfish-api-lvwk.onrender.com`, model `claude-haiku-5-5`. `EXPO_PUBLIC_API_BASE_URL` set to it in the EAS `preview` and `production` environments. |
+| Backend smoke test | 2026-11-22: `/healthz` 200 (live); no code → 401 `UNAUTHORIZED`; with code → 200, `provider_mode` live, `request_id` `15b5bbad-8d5b-46d8-a51e-7ed88ee83ade`, three ranked Tim Tam variants. Matching the Render log line (Anthropic request ID) is still to do. |
+| Live APK (`preview-live`) | Built 2026-11-22, 0.2.6 (2): [build](https://expo.dev/accounts/dhruvmehan/projects/starfish/builds/cafe79f2-ecd4-4b95-9a9f-1fd84cde27bb) · [APK](https://expo.dev/artifacts/eas/r9lLlwITHASS52GWz7qEmUJ2lZ7ohr78Ck4GSfNNlV0.apk) |
+| Live AAB (`production-live`) | Built 2026-11-22, 0.2.6 (2), signed with the EAS upload key: [build](https://expo.dev/accounts/dhruvmehan/projects/starfish/builds/8d84653c-ae92-4a9e-b643-0a7ad9a8f1ce) · [AAB](https://expo.dev/artifacts/eas/SZjcswxCuqUDSkc8EZopH1o9VwE_ngOtm5zi3L-DWc4.aab). Not uploaded to Play. |
+| Device test | Not done yet (owner's phone). |
 
 ## Layout
 
