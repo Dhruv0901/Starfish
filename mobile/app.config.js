@@ -1,4 +1,4 @@
-// Wraps app.json. A live build must name a real public HTTPS origin, or it fails here, before any bundling.
+// Wraps app.json. On EAS, a live build must name a real public HTTPS origin, or it fails here, before any bundling.
 const PLACEHOLDER = /your-host|example\.(com|org|net|test)|<|>|localhost|127\.0\.0\.1|^https:\/\/\.\.\./i;
 
 function checkLiveOrigin(mode, origin) {
@@ -19,7 +19,8 @@ function checkLiveOrigin(mode, origin) {
 }
 
 module.exports = ({ config }) => {
-  checkLiveOrigin(process.env.EXPO_PUBLIC_SEARCH_MODE, process.env.EXPO_PUBLIC_API_BASE_URL);
+  // EAS CLI reads this locally before it loads EAS environment variables; the build worker (EAS_BUILD) has them all.
+  if (process.env.EAS_BUILD) checkLiveOrigin(process.env.EXPO_PUBLIC_SEARCH_MODE, process.env.EXPO_PUBLIC_API_BASE_URL);
   return config;
 };
 module.exports.checkLiveOrigin = checkLiveOrigin;
