@@ -1,0 +1,25 @@
+# Render Blueprint for the Starfish API (one Python web service). Secrets are entered in the dashboard, never here.
+services:
+  - type: web
+    name: starfish-api
+    runtime: python
+    plan: free # spins down after 15 idle minutes; the first search after that waits for a cold start. "starter" stays up.
+    region: singapore # closest Render region to Australia
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m shopping_assistant.server --host 0.0.0.0 --port $PORT --mode live --trace-file /dev/stdout
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.4
+      - key: PYTHONPATH
+        value: src
+      - key: ANTHROPIC_MODEL
+        value: claude-haiku-5-5
+      - key: MODEL_TIMEOUT_SECONDS
+        value: "30" # the app waits 60 s, so it never abandons a paid call that is still running
+      - key: MODEL_MAX_OUTPUT_TOKENS
+        value: "8192" # Haiku 5.5 thinks by default; a 9 s biscuit search used about 1,600 output tokens
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: STARFISH_TESTER_CODE
+        sync: false

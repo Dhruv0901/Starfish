@@ -25,7 +25,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 import { tint } from './src/catalog';
 import { addItem, findOpen, Item, loadItems, removeItem, Removed, restoreItem, saveItems, toggleItem } from './src/list';
-import { Product, search, SEARCH_MODE, SearchResult } from './src/search';
+import { Product, saveTesterCode, search, SEARCH_MODE, SearchResult } from './src/search';
 
 const C = {
   bg: '#F4F6F8',
@@ -424,6 +424,14 @@ function SearchScreen({ items, onPick, onBack }: { items: Item[]; onPick: (p: { 
           <View style={{ gap: 12, paddingHorizontal: 8 }} accessibilityLiveRegion="polite">
             <Text style={styles.h2}>Search didn’t work</Text>
             <Text style={styles.intro}>{phase.result.message}</Text>
+            {phase.result.needsCode && (
+              <TesterCode
+                onSave={async (code) => {
+                  await saveTesterCode(code);
+                  void submit(submitted);
+                }}
+              />
+            )}
             {phase.result.retryable && (
               <Pressable onPress={() => void submit(submitted)} accessibilityRole="button" style={[styles.chip, styles.retry]}>
                 <Text style={[styles.chipText, { color: '#FFFFFF', fontFamily: F.semi }]}>Retry</Text>
@@ -502,6 +510,33 @@ function ResultRow({ product, onList, onPress }: { product: Product; onList: boo
         <Icon d={PLUS} size={18} color={C.accent} width={2.2} />
       </View>
     </Pressable>
+  );
+}
+
+function TesterCode({ onSave }: { onSave: (code: string) => void }) {
+  const [code, setCode] = useState('');
+  const save = () => code.trim() && onSave(code);
+  return (
+    <View style={{ gap: 10 }}>
+      <View style={styles.field}>
+        <TextInput
+          value={code}
+          onChangeText={setCode}
+          onSubmitEditing={save}
+          placeholder="Tester code"
+          placeholderTextColor={C.faint}
+          accessibilityLabel="Tester code"
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="done"
+          style={styles.input}
+        />
+      </View>
+      <Pressable onPress={save} accessibilityRole="button" style={[styles.chip, styles.retry]}>
+        <Text style={[styles.chipText, { color: '#FFFFFF', fontFamily: F.semi }]}>Save code and search</Text>
+      </Pressable>
+    </View>
   );
 }
 

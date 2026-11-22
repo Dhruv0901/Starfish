@@ -152,7 +152,8 @@
                 "MODEL_REFUSAL",
                 "INCOMPLETE_OUTPUT",
                 "INVALID_MODEL_OUTPUT",
-                "INTERNAL_ERROR"
+                "INTERNAL_ERROR",
+                "UNAUTHORIZED"
               ]
             },
             "message": {
